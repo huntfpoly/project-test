@@ -5,38 +5,59 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
+import { z } from "zod";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { FilterState, IPriority } from "@/app/types";
+import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CalendarIcon } from "@radix-ui/react-icons";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+import { useAction } from "@/hooks/useAction";
+import { createTask } from "@/actions/create-task";
+import { CreateTaskSchema } from "@/actions/create-task/schema";
 
 export function AddTask() {
   const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState<string>("");
-  const [description, setDescription] = useState<string>("");
-  const [status, setStatus] = useState<string>();
-  const [error, setError] = useState<string>();
-  const handleNewTask = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!title || !description || !status) {
-      setError("All fields are required");
-      return;
-    }
-    console.log("New Task", { title, description, status });
-    setOpen(false);
-  };
+
+  // 1. Define your form.
+  const form = useForm<z.infer<typeof CreateTaskSchema>>({
+    resolver: zodResolver(CreateTaskSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      status: FilterState.IN_COMPLETE,
+      dueDate: null,
+      priority: IPriority.LOW,
+    },
+  });
+
+  const { data, execute, isLoading } = useAction(createTask, {
+    onSuccess: () => {
+      form.reset();
+      setOpen(false);
+    },
+  });
+
+  // 2. Define a submit handler.
+  function onSubmit(values: z.infer<typeof CreateTaskSchema>) {
+    // This will be type-safe and validated.
+    console.log(values);
+    execute(values);
+    return;
+  }
+  // @ts-ignore
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -45,64 +66,139 @@ export function AddTask() {
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="text-xl">Add Task</DialogTitle>
-          <DialogDescription>
-            Add a new Task to your Task Manager here. Click save when you are
-            done.
-          </DialogDescription>
+          <DialogDescription>Add a new Task to your Task Manager here. Click save when you are done.</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleNewTask}>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-2">
-              <Label htmlFor="name" className="text-left">
-                Title
-              </Label>
-              <Input
-                id="name"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Title"
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4  items-center gap-2">
-              <Label htmlFor="description" className="text-left">
-                Description
-              </Label>
-              <Textarea
-                id="description"
-                className="col-span-3"
-                rows={5}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Description"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-2">
-              <Label htmlFor="status" className="text-left">
-                Status
-              </Label>
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Task Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {error && (
-              <p className="text-error-foreground bg-error-background rounded py-1 text-center">
-                {error}
-              </p>
-            )}
-          </div>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2">
+            {/* Row Title */}
+            <FormField
+              control={form.control}
+              name="title"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Title</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Title" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          <DialogFooter>
-            <Button type="submit">Save Task</Button>
-          </DialogFooter>
-        </form>
+            {/* Row Description */}
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description</FormLabel>
+                  <FormControl>
+                    <Textarea rows={3} placeholder="Description" className="resize-none" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {/* Row Date */}
+            <FormField
+              control={form.control}
+              name="dueDate"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel>Date of birth</FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant={"outline"}
+                          className={cn(
+                            "w-[240px] pl-3 text-left font-normal",
+                            !field.value && "text-muted-foreground",
+                          )}
+                        >
+                          {field.value ? format(field.value, "dd/MM/yyyy") : <span>Pick a date</span>}
+                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
+                    </PopoverContent>
+                  </Popover>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {/* Row Status */}
+            <FormField
+              control={form.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Task Status" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={FilterState.IN_COMPLETE}>
+                        <Badge variant="default" className="bg-green-500">
+                          In Progress
+                        </Badge>
+                      </SelectItem>
+                      <SelectItem value={FilterState.COMPLETED}>
+                        <Badge variant="default" className="bg-blue-500">
+                          Completed
+                        </Badge>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {/* Row Priority */}
+            <FormField
+              control={form.control}
+              name="priority"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Priority</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Task priority" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={IPriority.LOW}>
+                        <Badge variant="default" className="bg-yellow-500">
+                          Low
+                        </Badge>
+                      </SelectItem>
+                      <SelectItem value={IPriority.MEDIUM}>
+                        <Badge variant="default" className="bg-blue-500">
+                          Medium
+                        </Badge>
+                      </SelectItem>
+                      <SelectItem value={IPriority.HIGH}>
+                        <Badge variant="default" className="bg-red-500">
+                          High
+                        </Badge>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="!mt-5 flex justify-center">
+              <Button type="submit">Submit</Button>
+            </div>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );
