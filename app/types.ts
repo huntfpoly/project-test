@@ -1,21 +1,10 @@
-export enum FilterState {
-  IN_COMPLETE = "in_complete",
-  COMPLETED = "completed",
-}
+import { TaskPriority, TaskStatus } from "@prisma/client";
 
 export interface ITask {
   id: string;
   title: string;
   description: string;
-  status: FilterState;
+  status: TaskStatus;
   dueDate: string;
-  priority: IPriority;
-}
-export interface ITaskList {
-  [key: string]: ITask;
-}
-export enum IPriority {
-  HIGH = "high",
-  MEDIUM = "medium",
-  LOW = "low",
+  priority: TaskPriority;
 }

@@ -1,26 +1,31 @@
-import TaskList from "@/components/TaskList";
-import { db } from "@/lib/db";
+import TaskList from "@/app/_components/TaskList";
+import Header from "@/app/_components/Header";
 
-interface BoardIdPageProps {
-  params: {
-    boardId: string;
+import { getTasks } from "@/actions/get-task";
+import { TaskStatus } from "@prisma/client";
+
+interface TaskFilterPageProps {
+  searchParams: {
+    status: TaskStatus | "all" | undefined;
+    page: number;
+    pageSize: number;
   };
 }
-export default async function TaskPage() {
-  const lists = await db.task.findMany({
-    where: {},
-    orderBy: {
-      updatedAt: "desc",
-    },
+export default async function TaskPage(context: TaskFilterPageProps) {
+  const { status = "all", page = 1, pageSize = 10 } = context.searchParams;
+  const skip = pageSize * (page - 1);
+  const { data, totalPages, totalCount } = await getTasks({
+    status: status && status !== "all" ? status : undefined,
+    offset: skip,
+    limit: pageSize,
   });
   return (
     <main className="mx-auto min-h-screen ">
       <h1 className="pb-10 pt-6 text-center text-2xl font-black tracking-wide sm:pb-14 sm:text-4xl">
         Welcome to Task Manager
       </h1>
-      <div className="grid place-items-center">
-        <TaskList data={lists} />
-      </div>
+      <Header />
+      <TaskList data={data} totalPages={totalPages} totalCount={totalCount} />
     </main>
   );
 }

@@ -15,14 +15,25 @@ datasource db {
 }
 
 model Task {
-  id          String    @id @default(uuid())
+  id          String        @id @default(uuid())
   title       String
   description String?
-  status      String
+  status      TaskStatus    @default(IN_COMPLETE)
   dueDate     DateTime?
-  priority    String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  priority    TaskPriority?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   @@map("tasks")
+}
+
+enum TaskStatus {
+  IN_COMPLETE
+  COMPLETED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
 }

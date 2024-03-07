@@ -1,35 +1,44 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { z } from "zod";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FilterState, IPriority } from "@/app/types";
-import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon } from "@radix-ui/react-icons";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, setDefaultOptions } from "date-fns";
 import { useAction } from "@/hooks/useAction";
 import { createTask } from "@/actions/create-task";
 import { CreateTaskSchema } from "@/actions/create-task/schema";
+import { useCardModal } from "@/hooks/useCardModal";
+import { useQuery } from "@tanstack/react-query";
+import { fetcher } from "@/lib/fetcher";
+import { Task, TaskPriority, TaskStatus } from "@prisma/client";
+import React, { useEffect } from "react";
+import { updateTask } from "@/actions/edit-task";
+import { vi } from "date-fns/locale";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
-export function AddTask() {
-  const [open, setOpen] = useState(false);
+setDefaultOptions({ locale: vi });
+
+export function TaskModal() {
+  const isOpen = useCardModal((state) => state.isOpen);
+  const { onOpen, id, onClose } = useCardModal((state) => state);
+
+  const { data: taskData, isLoading: loading } = useQuery<Task>({
+    queryKey: ["task", id],
+    queryFn: () => fetcher(`/api/tasks/${id}`),
+    enabled: !!id,
+  });
 
   // 1. Define your form.
   const form = useForm<z.infer<typeof CreateTaskSchema>>({
@@ -37,35 +46,48 @@ export function AddTask() {
     defaultValues: {
       title: "",
       description: "",
-      status: FilterState.IN_COMPLETE,
-      dueDate: null,
-      priority: IPriority.LOW,
+      status: TaskStatus.IN_COMPLETE,
+      dueDate: undefined,
+      priority: undefined,
     },
   });
 
-  const { data, execute, isLoading } = useAction(createTask, {
+  useEffect(() => {
+    if (taskData) {
+      form.setValue("title", taskData.title);
+      form.setValue("description", taskData.description || "");
+      form.setValue("status", taskData.status as TaskStatus);
+      taskData.dueDate && form.setValue("dueDate", taskData.dueDate);
+      taskData.priority && form.setValue("priority", taskData.priority);
+    }
+  }, [taskData, form]);
+  // @ts-ignore
+  const { execute, isLoading } = useAction(id ? updateTask : createTask, {
     onSuccess: () => {
       form.reset();
-      setOpen(false);
+      onClose();
+      toast.success(id ? `Task ${id} updated!` : `Task created!`);
     },
   });
 
   // 2. Define a submit handler.
   function onSubmit(values: z.infer<typeof CreateTaskSchema>) {
     // This will be type-safe and validated.
-    console.log(values);
-    execute(values);
-    return;
+    const data = id && taskData ? { ...values, id: taskData.id } : values;
+    // @ts-ignore
+    execute(data);
   }
-  // @ts-ignore
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="default">Add New Task</Button>
-      </DialogTrigger>
+    <Dialog
+      open={isOpen}
+      onOpenChange={() => {
+        onClose();
+        form.reset();
+      }}
+    >
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="text-xl">Add Task</DialogTitle>
+          <DialogTitle className="text-xl">{id ? `Edit` : `Add`} Task</DialogTitle>
           <DialogDescription>Add a new Task to your Task Manager here. Click save when you are done.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -78,7 +100,7 @@ export function AddTask() {
                 <FormItem>
                   <FormLabel>Title</FormLabel>
                   <FormControl>
-                    <Input placeholder="Title" {...field} />
+                    <Input placeholder="Title" disabled={loading} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -93,12 +115,19 @@ export function AddTask() {
                 <FormItem>
                   <FormLabel>Description</FormLabel>
                   <FormControl>
-                    <Textarea rows={3} placeholder="Description" className="resize-none" {...field} />
+                    <Textarea
+                      disabled={loading}
+                      rows={3}
+                      placeholder="Description"
+                      className="resize-none"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
+
             {/* Row Date */}
             <FormField
               control={form.control}
@@ -111,6 +140,7 @@ export function AddTask() {
                       <FormControl>
                         <Button
                           variant={"outline"}
+                          disabled={loading}
                           className={cn(
                             "w-[240px] pl-3 text-left font-normal",
                             !field.value && "text-muted-foreground",
@@ -129,6 +159,7 @@ export function AddTask() {
                 </FormItem>
               )}
             />
+
             {/* Row Status */}
             <FormField
               control={form.control}
@@ -136,20 +167,20 @@ export function AddTask() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Status</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select disabled={loading} onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger className="col-span-3">
                         <SelectValue placeholder="Task Status" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value={FilterState.IN_COMPLETE}>
-                        <Badge variant="default" className="bg-green-500">
-                          In Progress
+                      <SelectItem value={TaskStatus.IN_COMPLETE}>
+                        <Badge variant="outline" className="bg-orange-100 text-orange-600">
+                          In Complete
                         </Badge>
                       </SelectItem>
-                      <SelectItem value={FilterState.COMPLETED}>
-                        <Badge variant="default" className="bg-blue-500">
+                      <SelectItem value={TaskStatus.COMPLETED}>
+                        <Badge variant="outline" className="bg-green-100 text-green-600">
                           Completed
                         </Badge>
                       </SelectItem>
@@ -165,27 +196,29 @@ export function AddTask() {
               name="priority"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Priority</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormLabel>Priority {field.value}</FormLabel>
+                  <Select disabled={loading} onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger className="col-span-3">
-                        <SelectValue placeholder="Task priority" />
+                        <SelectValue />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value={IPriority.LOW}>
-                        <Badge variant="default" className="bg-yellow-500">
-                          Low
+                      {/*@ts-ignore*/}
+                      <SelectItem value={undefined}>None</SelectItem>
+                      <SelectItem value={TaskPriority.LOW}>
+                        <Badge variant="outline" className="bg-green-100 text-green-600">
+                          {TaskPriority.LOW}
                         </Badge>
                       </SelectItem>
-                      <SelectItem value={IPriority.MEDIUM}>
-                        <Badge variant="default" className="bg-blue-500">
-                          Medium
+                      <SelectItem value={TaskPriority.MEDIUM}>
+                        <Badge variant="outline" className="bg-yellow-100 text-yellow-600">
+                          {TaskPriority.MEDIUM}
                         </Badge>
                       </SelectItem>
-                      <SelectItem value={IPriority.HIGH}>
-                        <Badge variant="default" className="bg-red-500">
-                          High
+                      <SelectItem value={TaskPriority.HIGH}>
+                        <Badge variant="outline" className="bg-red-100 text-red-600">
+                          {TaskPriority.HIGH}
                         </Badge>
                       </SelectItem>
                     </SelectContent>
@@ -195,7 +228,16 @@ export function AddTask() {
               )}
             />
             <div className="!mt-5 flex justify-center">
-              <Button type="submit">Submit</Button>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Please wait
+                  </>
+                ) : (
+                  "Submit"
+                )}
+              </Button>
             </div>
           </form>
         </Form>
