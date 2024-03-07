@@ -1,6 +1,6 @@
 "use client";
 import { create } from "zustand";
-import { TaskStatus } from "@/app/types";
+import { TaskStatus } from "@prisma/client";
 
 export type FilterState = TaskStatus | "all";
 type filterStore = {

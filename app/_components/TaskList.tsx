@@ -34,11 +34,16 @@ const TaskList = ({ data, totalPages, totalCount }: TaskListProps) => {
   };
   return (
     <>
-      <div className="grid max-h-[600px] grid-cols-1 gap-4 overflow-auto py-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {data.map((task: any) => (
-          <TaskItem key={task.id} item={task} />
-        ))}
-      </div>
+      {data.length ? (
+        <div className="grid max-h-[600px] grid-cols-1 gap-4 overflow-auto py-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {data.map((task: any) => (
+            <TaskItem key={task.id} item={task} />
+          ))}
+        </div>
+      ) : (
+        <div className="text-center text-gray-500">No tasks found</div>
+      )}
+
       <Pagination>
         <PaginationContent>
           {Array.from({ length: totalPages }, (_, i) => (
